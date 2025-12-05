@@ -6,21 +6,32 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Activity } from 'lucide-react';
 
 export default function PulseMonitor() {
+  // Default to a resting heart rate of 65
   const [heartRate, setHeartRate] = useState(65);
   const [status, setStatus] = useState<'Normal' | 'Spike' | 'Critical'>('Normal');
 
   useEffect(() => {
-    // 1. Fetch Last Known Heart Rate
+    // 1. Fetch Last Known Heart Rate on load
     const fetchInitial = async () => {
-      const { data } = await supabase
-        .from('logs_physiology')
-        .select('value')
-        .or('metric_name.eq.Heart_Rate,metric_name.eq.RHR')
-        .order('timestamp', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (data) setHeartRate(data.value);
+      try {
+        const { data, error } = await supabase
+          .from('logs_physiology')
+          .select('value')
+          .or('metric_name.eq.Heart_Rate,metric_name.eq.RHR')
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (data) {
+          setHeartRate(data.value);
+          updateStatus(data.value);
+        }
+        if (error) {
+          console.error("Error fetching initial heart rate:", error);
+        }
+      } catch (err) {
+        console.error("Unexpected error in PulseMonitor:", err);
+      }
     };
     fetchInitial();
 
@@ -31,14 +42,15 @@ export default function PulseMonitor() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'logs_physiology' },
         (payload) => {
-          const row = payload.new;
-          if (row.metric_name === 'RHR' || row.metric_name === 'Heart_Rate') {
-            const hr = row.value;
-            setHeartRate(hr);
-            
-            if (hr > 110) setStatus('Critical');
-            else if (hr > 90) setStatus('Spike');
-            else setStatus('Normal');
+          const row = payload.new as any;
+          
+          // Robust check for metric name (handles different spellings)
+          const name = (row.metric_name || row.metric || "").toString().toLowerCase();
+          const val = row.value;
+
+          if (name.includes('heart') || name.includes('rhr') || name.includes('pulse')) {
+            setHeartRate(val);
+            updateStatus(val);
           }
         }
       )
@@ -49,9 +61,16 @@ export default function PulseMonitor() {
     };
   }, []);
 
+  // Helper logic to determine status based on BPM
+  const updateStatus = (bpm: number) => {
+    if (bpm > 110) setStatus('Critical');
+    else if (bpm > 90) setStatus('Spike');
+    else setStatus('Normal');
+  };
+
   return (
     <div className="relative p-6 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl overflow-hidden">
-      {/* Red Alert Flash */}
+      {/* Red Alert Flash Animation */}
       <AnimatePresence>
         {status === 'Critical' && (
           <motion.div
