@@ -47,12 +47,13 @@ export default function MissionControl() {
           setAnki(prev => ({ ...prev, backlog: deck.value ?? 0 }));
         }
 
-        // 3. Get Health Advice (Handling JSONB safely)
+        // 3. Get Health Advice (Targeted Search)
         const { data: physio, error: physioError } = await supabase
           .from('logs_physiology')
           .select('raw_data')
-          .limit(1)
+          .eq('metric_name', 'Health_Advice') // <--- THE FIX: Filter for Advice only
           .order('timestamp', { ascending: false })
+          .limit(1)
           .single();
 
         if (!physioError && physio?.raw_data) {

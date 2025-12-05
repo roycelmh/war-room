@@ -20,7 +20,7 @@ export default function WormholeChart() {
   }, []);
 
   return (
-    <div className="h-[300px] w-full p-4 rounded-xl border border-zinc-800 bg-black/60 backdrop-blur-md">
+    <div className="h-[300px] min-h-[300px] w-full ...">
        <div className="flex justify-between items-center mb-4">
          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Bio-Output Timeline</h2>
        </div>

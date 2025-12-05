@@ -6,71 +6,47 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Activity } from 'lucide-react';
 
 export default function PulseMonitor() {
-  // Default to a resting heart rate of 65
   const [heartRate, setHeartRate] = useState(65);
   const [status, setStatus] = useState<'Normal' | 'Spike' | 'Critical'>('Normal');
 
   useEffect(() => {
-    // 1. Fetch Last Known Heart Rate on load
-    const fetchInitial = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('logs_physiology')
-          .select('value')
-          .or('metric_name.eq.Heart_Rate,metric_name.eq.RHR')
-          .order('timestamp', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (data) {
-          setHeartRate(data.value);
-          updateStatus(data.value);
-        }
-        if (error) {
-          console.error("Error fetching initial heart rate:", error);
-        }
-      } catch (err) {
-        console.error("Unexpected error in PulseMonitor:", err);
-      }
-    };
-    fetchInitial();
+    console.log("🔌 PulseMonitor: Connecting to Supabase Realtime...");
 
-    // 2. Listen for Realtime Updates
     const channel = supabase
-      .channel('realtime-pulse')
+      .channel('realtime-pulse-debug') // Unique channel name
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'logs_physiology' },
         (payload) => {
+          console.log("⚡ REALTIME EVENT RECEIVED:", payload); // DEBUG LOG
+
           const row = payload.new as any;
-          
-          // Robust check for metric name (handles different spellings)
+          // Normalize keys (handle different capitalizations/aliases)
           const name = (row.metric_name || row.metric || "").toString().toLowerCase();
-          const val = row.value;
+          const val = Number(row.value);
 
           if (name.includes('heart') || name.includes('rhr') || name.includes('pulse')) {
+            console.log(`❤️ Heart Rate Update: ${val}`);
             setHeartRate(val);
-            updateStatus(val);
+            
+            if (val > 110) setStatus('Critical');
+            else if (val > 90) setStatus('Spike');
+            else setStatus('Normal');
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("📡 Subscription Status:", status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  // Helper logic to determine status based on BPM
-  const updateStatus = (bpm: number) => {
-    if (bpm > 110) setStatus('Critical');
-    else if (bpm > 90) setStatus('Spike');
-    else setStatus('Normal');
-  };
-
+  // ... (Render logic same as before) ...
   return (
     <div className="relative p-6 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl overflow-hidden">
-      {/* Red Alert Flash Animation */}
       <AnimatePresence>
         {status === 'Critical' && (
           <motion.div
