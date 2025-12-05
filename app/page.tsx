@@ -2,54 +2,56 @@
 
 import dynamic from 'next/dynamic';
 import PulseMonitor from '@/components/PulseMonitor';
-import InsightsTicker from '@/components/InsightsTicker';
 import MissionControl from '@/components/MissionControl';
+import InsightsTicker from '@/components/InsightsTicker';
 
-// Dynamic Imports for Heavy Charts
+// Dynamic Imports
 const WormholeChart = dynamic(() => import('@/components/WormholeChart'), { 
   ssr: false,
-  loading: () => <div className="h-[400px] w-full bg-zinc-900/50 rounded-2xl animate-pulse" />
+  loading: () => <div className="h-[350px] w-full bg-zinc-900/50 rounded-xl animate-pulse border border-zinc-800" />
 });
 
 const SynapseGraph = dynamic(() => import('@/components/SynapseGraph'), { 
   ssr: false,
-  loading: () => <div className="h-[400px] w-full bg-zinc-900/50 rounded-2xl animate-pulse" />
+  loading: () => <div className="h-[350px] w-full bg-zinc-900/50 rounded-xl animate-pulse border border-zinc-800" />
 });
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-white p-4 md:p-8 font-sans selection:bg-emerald-500/30">
+    <main className="min-h-screen bg-zinc-950 text-white p-4 md:p-6 font-sans selection:bg-emerald-500/30 pb-20">
       
       {/* Header */}
-      <header className="flex justify-between items-center mb-12">
+      <header className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-500">
+          <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-white">
             WAR ROOM
           </h1>
-          <p className="text-zinc-500 font-mono text-sm mt-1">OUROBOROS v11.0 // SYSTEM ONLINE</p>
+          <p className="text-zinc-500 font-mono text-xs">OUROBOROS v11.0 // ONLINE</p>
         </div>
-        <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_20px_#10b981]" />
+        <div className="flex items-center gap-3">
+             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]" />
+        </div>
       </header>
-      
+
+      {/* 1. MISSION CONTROL (Top Priority) */}
       <section className="mb-6">
         <MissionControl />
       </section>
 
-      {/* Grid Layout */}
+      {/* 2. MAIN GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Column: Biometrics & Status */}
+        {/* Left Column: Live Bio-Stats */}
         <div className="space-y-6">
           <PulseMonitor />
           <InsightsTicker />
         </div>
 
-        {/* Right Column: Visualizations */}
+        {/* Right Column: Deep Analytics */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Top Row: Wormhole */}
           <WormholeChart />
           
-          {/* Bottom Row: Synapse Graph */}
+          {/* 3D Brain (Optional Eye Candy) */}
           <SynapseGraph />
         </div>
       </div>
