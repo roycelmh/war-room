@@ -20,7 +20,7 @@ export default function WormholeChart() {
   }, []);
 
   return (
-    <div className="relative w-full h-[350px] p-6 rounded-2xl bg-black border border-white/10 overflow-hidden">
+    <div className="bg-black/40 backdrop-blur-xl border-white/10 shadow-[0_0_15px_rgba(16,185,129,0.1)] relative w-full h-[350px] p-6 rounded-2xl bg-black border border-white/10 overflow-hidden">
        {/* Glow Effect */}
        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2/3 h-1 bg-emerald-500 blur-[50px] opacity-20"></div>
 

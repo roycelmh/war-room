@@ -42,7 +42,7 @@ export default function MissionControl() {
   }, []);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
+    <div className="bg-black/40 backdrop-blur-xl border-white/10 shadow-[0_0_15px_rgba(16,185,129,0.1)] grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
       
       {/* LEFT: CURRENT OBJECTIVE (Span 5) */}
       <div className="lg:col-span-5 relative group">
