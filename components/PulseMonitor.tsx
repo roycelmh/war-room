@@ -10,6 +10,21 @@ export default function PulseMonitor() {
   const [status, setStatus] = useState<'Normal' | 'Spike' | 'Critical'>('Normal');
 
   useEffect(() => {
+    // 1. Fetch Last Known Heart Rate
+    const fetchInitial = async () => {
+      const { data } = await supabase
+        .from('logs_physiology')
+        .select('value')
+        .or('metric_name.eq.Heart_Rate,metric_name.eq.RHR')
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (data) setHeartRate(data.value);
+    };
+    fetchInitial();
+
+    // 2. Listen for Realtime Updates
     const channel = supabase
       .channel('realtime-pulse')
       .on(
@@ -20,6 +35,7 @@ export default function PulseMonitor() {
           if (row.metric_name === 'RHR' || row.metric_name === 'Heart_Rate') {
             const hr = row.value;
             setHeartRate(hr);
+            
             if (hr > 110) setStatus('Critical');
             else if (hr > 90) setStatus('Spike');
             else setStatus('Normal');
@@ -35,6 +51,7 @@ export default function PulseMonitor() {
 
   return (
     <div className="relative p-6 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl overflow-hidden">
+      {/* Red Alert Flash */}
       <AnimatePresence>
         {status === 'Critical' && (
           <motion.div
@@ -60,6 +77,7 @@ export default function PulseMonitor() {
             </div>
           </div>
         </div>
+        
         <div className={`px-3 py-1 rounded-full text-xs font-bold border ${
           status === 'Normal' ? 'border-emerald-500/50 text-emerald-400' : 'border-red-500/50 text-red-400 animate-pulse'
         }`}>
