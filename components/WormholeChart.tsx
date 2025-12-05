@@ -20,7 +20,10 @@ export default function WormholeChart() {
   }, []);
 
   return (
-    <div className="h-[300px] min-h-[300px] w-full ...">
+    <div 
+  className="h-[300px] w-full p-4 ..." 
+  style={{ width: '100%', height: '300px' }} // Explicit size
+>
        <div className="flex justify-between items-center mb-4">
          <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Bio-Output Timeline</h2>
        </div>
