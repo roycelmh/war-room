@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic';
 import PulseMonitor from '@/components/PulseMonitor';
 import MissionControl from '@/components/MissionControl';
 import InsightsTicker from '@/components/InsightsTicker';
+import PlayerStats from '@/components/PlayerStats';
+import QuestLog from '@/components/QuestLog';
 
 // Dynamic Imports
 const WormholeChart = dynamic(() => import('@/components/WormholeChart'), { 
@@ -39,23 +41,26 @@ export default function Home() {
       </section>
 
       {/* 2. MAIN GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left Column: Live Bio-Stats */}
-        <div className="space-y-6">
+        {/* LEFT COLUMN: PLAYER STATS (3 Cols) */}
+        <div className="lg:col-span-3 space-y-6">
+          <PlayerStats />
           <PulseMonitor />
-          <InsightsTicker />
         </div>
 
-        {/* Right Column: Deep Analytics */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* MIDDLE COLUMN: VISUALIZATIONS (6 Cols) */}
+        <div className="lg:col-span-6 space-y-6">
           <WormholeChart />
-          
-          {/* 3D Brain (Optional Eye Candy) */}
           <SynapseGraph />
         </div>
-      </div>
 
+        {/* RIGHT COLUMN: QUESTS & INSIGHTS (3 Cols) */}
+        <div className="lg:col-span-3 space-y-6">
+          <QuestLog />
+          <InsightsTicker />
+        </div>
+      </div>
     </main>
   );
 }
