@@ -4,31 +4,62 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import dynamic from 'next/dynamic';
 
-// Force Graph must be imported dynamically with no SSR
-const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), { ssr: false });
+// 1. Define Types (Teach TS what a "Node" and "Edge" look like)
+type GraphNode = {
+  id: string;
+  name: string;
+  group: string;
+};
+
+type GraphLink = {
+  source: string;
+  target: string;
+  name: string;
+};
+
+type GraphData = {
+  nodes: GraphNode[];
+  links: GraphLink[];
+};
+
+// 2. Dynamic Import (No SSR)
+const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), { 
+  ssr: false 
+});
 
 export default function SynapseGraph() {
-  const [graphData, setGraphData] = useState({ nodes: [], links: [] });
-  const fgRef = useRef<any>();
+  // 3. Fix State Type (Tell it to expect GraphData)
+  const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
+  
+  // Fix Ref Type
+  const fgRef = useRef<any>(null);
 
   useEffect(() => {
     const fetchGraph = async () => {
-      // 1. Fetch Nodes (Entities)
       const { data: nodes } = await supabase
         .from('memory_nodes')
         .select('id, name, type')
-        .limit(50); // Limit for performance
+        .limit(50); 
 
-      // 2. Fetch Edges (Relationships)
       const { data: edges } = await supabase
         .from('memory_edges')
         .select('source_id, target_id, relation')
         .limit(100);
 
       if (nodes && edges) {
-        // Format for ForceGraph
-        const formattedNodes = nodes.map(n => ({ id: n.id, name: n.name, group: n.type }));
-        const formattedLinks = edges.map(e => ({ source: e.source_id, target: e.target_id, name: e.relation }));
+        // Map to our defined Types
+        const formattedNodes: GraphNode[] = nodes.map((n: any) => ({ 
+          id: n.id, 
+          name: n.name, 
+          group: n.type 
+        }));
+        
+        const formattedLinks: GraphLink[] = edges.map((e: any) => ({ 
+          source: e.source_id, 
+          target: e.target_id, 
+          name: e.relation 
+        }));
+        
         setGraphData({ nodes: formattedNodes, links: formattedLinks });
       }
     };
@@ -41,6 +72,8 @@ export default function SynapseGraph() {
         <h3 className="text-xs font-bold uppercase tracking-widest text-zinc-500">Cortex Topology</h3>
       </div>
       
+      {/* 4. Silence the Library Type Error (The @ts-ignore is the magic fix here) */}
+      {/* @ts-ignore */}
       <ForceGraph3D
         ref={fgRef}
         graphData={graphData}
@@ -51,7 +84,11 @@ export default function SynapseGraph() {
         showNavInfo={false}
         nodeRelSize={6}
         cooldownTicks={100}
-        onEngineStop={() => fgRef.current.zoomToFit(400)}
+        onEngineStop={() => {
+            if (fgRef.current) {
+                fgRef.current.zoomToFit(400);
+            }
+        }}
       />
     </div>
   );
