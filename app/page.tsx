@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import PulseMonitor from '@/components/PulseMonitor';
 import InsightsTicker from '@/components/InsightsTicker';
+import MissionControl from '@/components/MissionControl';
 
 // Dynamic Imports for Heavy Charts
 const WormholeChart = dynamic(() => import('@/components/WormholeChart'), { 
@@ -29,6 +30,10 @@ export default function Home() {
         </div>
         <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_20px_#10b981]" />
       </header>
+      
+      <section className="mb-6">
+        <MissionControl />
+      </section>
 
       {/* Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
