@@ -112,9 +112,9 @@ export default function MissionControl() {
           <Brain className="w-5 h-5" />
           <span className="text-xs font-bold uppercase tracking-widest">Hua Tuo</span>
         </div>
-        <p className="text-sm text-zinc-300 leading-snug">
-          {advice}
-        </p>
+        <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap font-mono">
+  {advice}
+</p>
       </div>
     </div>
   );
