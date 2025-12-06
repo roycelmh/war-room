@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Target, Activity, ChevronRight, Eye, EyeOff, Crosshair, Cloud, CloudRain, Sun, Wind, MapPin, Navigation, Droplets, ArrowUpRight } from 'lucide-react';
+import { Target, Activity, ChevronRight, Eye, EyeOff, Crosshair, Cloud, CloudRain, Sun, Wind, MapPin, Navigation, Droplets, ArrowUpRight, AlertTriangle, CheckCircle, Zap, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- TYPES ---
@@ -10,6 +10,7 @@ type MissionData = { title: string; time: string; status: 'Active' | 'Pending' }
 type AnkiData = { backlog: number; reviews: number };
 type HostileData = { count: number; max: number; status: string };
 type WeatherData = { temp: number; place: string; iconIndex: number; humidity: number; tips: string[] };
+type BioMetric = { label: string; value: string; type: 'sleep' | 'hrv' | 'risk' | 'verdict' | 'neutral' };
 
 const STATIONS = [
   { name: 'Hong Kong Observatory', lat: 22.302, lon: 114.174 },
@@ -30,7 +31,7 @@ export default function MissionControl() {
   const [mission, setMission] = useState<MissionData>({ title: "PRAS Burns Clinic (Group A)", time: "02:30 PM", status: 'Active' });
   const [anki, setAnki] = useState<AnkiData>({ backlog: 142, reviews: 45 });
   const [hostiles, setHostiles] = useState<HostileData>({ count: 44, max: 50, status: 'SECTOR 50 ENGAGED' });
-  const [adviceList, setAdviceList] = useState<string[]>(["Initializing Bio-Link...", "Waiting for physiological data."]);
+  const [bioMetrics, setBioMetrics] = useState<BioMetric[]>([]);
   const [weather, setWeather] = useState<WeatherData>({ temp: 0, place: 'SCANNING...', iconIndex: 50, humidity: 0, tips: [] });
 
   // --- HELPERS ---
@@ -46,28 +47,58 @@ export default function MissionControl() {
 
   const generateWeatherTips = (temp: number, icon: number, isCombat: boolean) => {
     let tips = [];
-    if (icon >= 60) tips.push(isCombat ? "ION SHIELD (UMBRELLA)" : "Bring Umbrella");
-    if (temp < 15) tips.push(isCombat ? "THERMAL ARMOR (COAT)" : "Wear Coat");
-    else if (temp < 20) tips.push(isCombat ? "LIGHT PLATING (JACKET)" : "Light Jacket");
-    else if (temp > 30) tips.push(isCombat ? "COOLANT FLUSH (WATER)" : "Hydrate");
-    if (icon === 51 || icon === 52) tips.push(isCombat ? "OCULAR SHIELD (SHADES)" : "Sunglasses");
+    if (icon >= 60) tips.push(isCombat ? "SHIELD (UMBRELLA)" : "Umbrella");
+    if (temp < 15) tips.push(isCombat ? "ARMOR (COAT)" : "Wear Coat");
+    else if (temp < 20) tips.push(isCombat ? "LIGHT ARMOR" : "Jacket");
+    else if (temp > 30) tips.push(isCombat ? "COOLANT (WATER)" : "Hydrate");
+    if (icon === 51 || icon === 52) tips.push(isCombat ? "OCULAR SHIELD" : "Sunglasses");
     if (tips.length === 0) tips.push(isCombat ? "ATMOSPHERE STABLE" : "Conditions Good");
     return tips;
   };
 
+  // --- NEW ROBUST PARSER ---
   const parseBioData = (rawText: string) => {
-    let cleanText = rawText
-        .replace(/•/g, '|') 
-        .replace(/Sleep:/g, '|Sleep:')
-        .replace(/HRV:/g, '|HRV:')
-        .replace(/Risks:/g, '|Risks:')
-        .replace(/Verdict:/g, '|Verdict:')
-        .replace(/Tip:/g, '|Tip:');
-    return cleanText.split('|').map(s => s.trim()).filter(s => s.length > 2);
+    // 1. Remove Markdown artifacts (*, #, >)
+    let cleanText = rawText.replace(/\*\*/g, '').replace(/\*/g, '').replace(/>/g, '').replace(/•/g, '');
+    
+    // 2. Identify segments
+    const segments: BioMetric[] = [];
+    
+    // Define patterns to search for. We split by the Key to isolate the Value.
+    const keys = ['Sleep:', 'HRV:', 'Risks:', 'Verdict:'];
+    
+    // Simple way: Split text by sentences or common delimiters
+    // We will look for substrings
+    
+    // Find Sleep
+    const sleepMatch = cleanText.match(/Sleep:\s*([^•\n]+)/i);
+    if (sleepMatch) segments.push({ label: 'Sleep', value: sleepMatch[1].trim(), type: 'sleep' });
+
+    // Find HRV
+    const hrvMatch = cleanText.match(/HRV:\s*([^•\n]+)/i);
+    if (hrvMatch) segments.push({ label: 'HRV', value: hrvMatch[1].trim(), type: 'hrv' });
+
+    // Find Risks (Often longer)
+    const riskMatch = cleanText.match(/Risks:\s*([^•\n]+)/i);
+    if (riskMatch) segments.push({ label: 'Risks', value: riskMatch[1].trim(), type: 'risk' });
+
+    // Find Verdict
+    const verdictMatch = cleanText.match(/Verdict:\s*([^•\n]+)/i);
+    if (verdictMatch) segments.push({ label: 'Verdict', value: verdictMatch[1].trim(), type: 'verdict' });
+
+    // If regex fails (different format), fallback to splitting by periods
+    if (segments.length === 0) {
+        cleanText.split('.').forEach(s => {
+            if (s.length > 5) segments.push({ label: '', value: s.trim(), type: 'neutral' });
+        });
+    }
+
+    return segments;
   };
 
   useEffect(() => {
     const fetchData = async () => {
+      // 1. Mission
       const { data: cal } = await supabase.from('calendar_cache').select('*').limit(1).single();
       if (cal) {
         const now = new Date();
@@ -79,18 +110,24 @@ export default function MissionControl() {
         });
       }
       
+      // 2. Anki
       const { data: deck } = await supabase.from('logs_performance').select('value').eq('metric_name', 'Anki_Backlog').order('timestamp', { ascending: false }).limit(1).single();
       if (deck) {
         setAnki(prev => ({ ...prev, backlog: deck.value ?? 0 }));
         setHostiles({ count: Math.min(deck.value ?? 0, 50), max: 50, status: 'ENGAGING TARGETS' });
       }
 
+      // 3. Bio-Scan
       const { data: physio } = await supabase.from('logs_physiology').select('raw_data').eq('metric_name', 'Health_Advice').order('timestamp', { ascending: false }).limit(1).single();
       if (physio?.raw_data) {
         const rawText = physio.raw_data.analysis_summary || physio.raw_data.advice || "System Stable.";
-        setAdviceList(parseBioData(rawText));
+        setBioMetrics(parseBioData(rawText));
+      } else {
+        // Mock fallback for visual testing
+        setBioMetrics(parseBioData("**Sleep:** 6.86h (Slightly below optimal) • **HRV:** 58.88 (Slight decline) • **Risks:** Potential auditory fatigue."));
       }
 
+      // 4. Weather
       try {
         navigator.geolocation.getCurrentPosition(async (position) => {
           const { latitude, longitude } = position.coords;
@@ -121,6 +158,7 @@ export default function MissionControl() {
     fetchData();
   }, []); 
 
+  // Update tips on mode change
   useEffect(() => {
     if (weather.temp !== 0) {
       setWeather(prev => ({
@@ -135,6 +173,16 @@ export default function MissionControl() {
     if (weather.iconIndex >= 60 && weather.iconIndex <= 65) return <Cloud className={className} />;
     if (weather.iconIndex >= 80) return <CloudRain className={className} />;
     return <Wind className={className} />;
+  };
+
+  const BioIcon = ({ type, className }: { type: string, className?: string }) => {
+    switch(type) {
+        case 'sleep': return <Moon className={className} />;
+        case 'hrv': return <Zap className={className} />;
+        case 'risk': return <AlertTriangle className={className} />;
+        case 'verdict': return <CheckCircle className={className} />;
+        default: return <Activity className={className} />;
+    }
   };
 
   return (
@@ -155,8 +203,7 @@ export default function MissionControl() {
         </div>
 
         {/* --- LEFT: MISSION & WEATHER --- */}
-        <div className="lg:col-span-5 flex flex-col justify-between h-full">
-            {/* TOP SECTION */}
+        <div className="lg:col-span-5 flex flex-col justify-between h-full relative">
             <div>
                 <div className={`flex items-center gap-2 mb-4 font-bold tracking-widest text-xs ${mode === 'COMBAT' ? 'text-red-500' : 'text-cyan-500'}`}>
                     <Target className="w-4 h-4" /> CURRENT OBJECTIVE
@@ -172,40 +219,41 @@ export default function MissionControl() {
                 </div>
             </div>
 
-            {/* BOTTOM SECTION: WEATHER */}
-            <div className="mt-4 pt-4 border-t border-white/5">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                        <WeatherIcon className={`w-6 h-6 ${mode === 'COMBAT' ? 'text-red-400' : 'text-cyan-400'}`} />
+            <div className="mt-auto pt-6 border-t border-white/5">
+                <div className="flex items-end justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-lg border backdrop-blur-sm ${mode === 'COMBAT' ? 'border-red-900 bg-red-950/30 text-red-400' : 'border-white/10 bg-white/5 text-zinc-300'}`}>
+                            <WeatherIcon className="w-8 h-8" />
+                        </div>
                         <div>
-                            <div className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-widest opacity-60">
+                            <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest opacity-60 mb-1">
                                 {locationLocked ? <Navigation className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
                                 {mode === 'COMBAT' ? weather.place.toUpperCase().replace(' ', '_') : weather.place}
                             </div>
-                            <span className={`font-mono text-xl font-bold ${mode === 'COMBAT' ? 'text-red-100' : 'text-white'}`}>{weather.temp}°C</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className={`font-mono text-3xl font-black leading-none ${mode === 'COMBAT' ? 'text-red-100' : 'text-white'}`}>{weather.temp}°</span>
+                                <span className="text-xs text-zinc-500 font-mono flex items-center gap-1"><Droplets className="w-3 h-3" /> {weather.humidity}%</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="text-right">
-                       <span className="text-[10px] font-mono text-zinc-500 flex items-center gap-1 justify-end"><Droplets className="w-3 h-3" /> {weather.humidity}%</span>
+                    {/* Compact Tips Below Weather */}
+                    <div className={`flex flex-col items-end justify-end text-[10px] font-mono h-full opacity-80 ${mode === 'COMBAT' ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {weather.tips.map((tip, i) => (
+                            <div key={i} className="flex items-center gap-1">
+                                <ArrowUpRight className="w-3 h-3" /> {tip}
+                            </div>
+                        ))}
                     </div>
-                </div>
-                {/* TIPS ROW */}
-                <div className={`text-[10px] font-mono flex flex-wrap gap-3 ${mode === 'COMBAT' ? 'text-red-400/80' : 'text-emerald-400/80'}`}>
-                    {weather.tips.map((tip, i) => (
-                        <span key={i} className="flex items-center gap-1">
-                            <ArrowUpRight className="w-3 h-3" /> {tip}
-                        </span>
-                    ))}
                 </div>
             </div>
         </div>
 
         {/* --- MIDDLE: SPACIOUS VISUALIZER --- */}
-        <div className="lg:col-span-3 flex flex-col justify-center items-center py-8 border-x border-white/5 mx-2 px-2">
+        <div className="lg:col-span-3 flex flex-col justify-center items-center py-8 border-x border-white/5 mx-2 px-6">
             <AnimatePresence mode="wait">
                 {mode === 'NORMAL' ? (
                     <motion.div key="norm" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="text-center w-full">
-                        <div className="relative flex justify-center py-8">
+                        <div className="relative flex justify-center py-10">
                             <div className="w-48 h-48 rounded-full border-4 border-cyan-500/10 flex items-center justify-center relative shadow-[0_0_30px_rgba(6,182,212,0.1)]">
                                 <div className="absolute inset-0 rounded-full border-t-2 border-cyan-500 animate-spin" style={{ animationDuration: '8s' }}></div>
                                 <div className="absolute inset-4 rounded-full border-b-2 border-cyan-500/30 animate-spin" style={{ animationDuration: '12s', animationDirection: 'reverse' }}></div>
@@ -218,7 +266,7 @@ export default function MissionControl() {
                         <span className="text-[10px] font-mono text-zinc-600 tracking-[0.4em] uppercase">Cortex Retention Load</span>
                     </motion.div>
                 ) : (
-                    <motion.div key="cbt" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full text-center relative py-12">
+                    <motion.div key="cbt" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full text-center relative py-16">
                         <div className="absolute inset-0 grid grid-cols-6 gap-1 opacity-20 pointer-events-none">
                             {Array.from({length: 30}).map((_, i) => <div key={i} className={`rounded-sm transition-colors duration-1000 ${i%3===0?'bg-red-500/50':'border border-red-900/50'}`} />)}
                         </div>
@@ -232,7 +280,7 @@ export default function MissionControl() {
             </AnimatePresence>
         </div>
 
-        {/* --- RIGHT: BIO-SCAN LIST --- */}
+        {/* --- RIGHT: BIO-SCAN (CLEAN LIST) --- */}
         <div className="lg:col-span-4 flex flex-col h-full overflow-hidden pl-4">
             <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/5">
                 <Activity className={`w-4 h-4 ${mode === 'COMBAT' ? 'text-red-500' : 'text-purple-500'}`} />
@@ -241,20 +289,29 @@ export default function MissionControl() {
                 </span>
             </div>
             
-            <div className={`flex-1 rounded-lg p-4 font-mono text-xs leading-relaxed overflow-y-auto custom-scrollbar border ${
-                mode === 'COMBAT' ? 'bg-red-950/10 border-red-500/20 text-red-200/90' : 'bg-black/40 border-white/5 text-emerald-100/90'
+            <div className={`flex-1 rounded-lg p-4 leading-relaxed overflow-y-auto custom-scrollbar border ${
+                mode === 'COMBAT' ? 'bg-red-950/10 border-red-500/20 text-red-100' : 'bg-black/40 border-white/5 text-zinc-200'
             }`}>
                 <ul className="space-y-4">
-                    {adviceList.map((item, idx) => (
-                        <li key={idx} className="flex items-start gap-3 group">
-                            <div className={`mt-1.5 min-w-[6px] h-[6px] rounded-full transition-all duration-300 ${mode === 'COMBAT' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}`} />
-                            <span className={`${
-                                mode === 'COMBAT' && item.toLowerCase().includes('risk') ? 'text-red-400 font-bold' : ''
-                            } ${
-                                item.includes('Sleep') ? 'text-blue-200' : ''
+                    {bioMetrics.map((item, idx) => (
+                        <li key={idx} className="group">
+                            <div className="flex items-center gap-2 mb-1">
+                                <BioIcon type={item.type} className={`w-3 h-3 ${
+                                    item.type === 'sleep' ? 'text-blue-400' : 
+                                    item.type === 'hrv' ? 'text-purple-400' : 
+                                    item.type === 'risk' ? 'text-red-500' : 
+                                    item.type === 'verdict' ? 'text-emerald-400' : 'text-zinc-500'
+                                }`} />
+                                {item.label && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{item.label}</span>
+                                )}
+                            </div>
+                            <p className={`text-xs font-mono ml-5 ${
+                                item.type === 'risk' ? 'text-red-300 font-bold' : 
+                                item.type === 'verdict' ? 'text-emerald-200' : ''
                             }`}>
-                                {item}
-                            </span>
+                                {item.value}
+                            </p>
                         </li>
                     ))}
                 </ul>
