@@ -28,3 +28,13 @@ body::before {
 ::-webkit-scrollbar-track { background: #09090b; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #10b981; }
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-white;
+    /* Optional: Subtle grid background */
+    background-image: linear-gradient(to right, #18181b 1px, transparent 1px),
+                      linear-gradient(to bottom, #18181b 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}
