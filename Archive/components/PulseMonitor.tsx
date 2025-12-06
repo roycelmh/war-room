@@ -10,53 +10,41 @@ export default function PulseMonitor() {
   const [status, setStatus] = useState<'Normal' | 'Spike' | 'Critical'>('Normal');
 
   useEffect(() => {
-    // 1. Fetch Initial
-    const fetchInitial = async () => {
-      try {
-        const { data } = await supabase
-          .from('logs_physiology')
-          .select('value')
-          .or('metric_name.eq.Heart_Rate,metric_name.eq.RHR')
-          .order('timestamp', { ascending: false })
-          .limit(1)
-          .single();
-        
-        if (data) {
-            setHeartRate(data.value);
-            updateStatus(data.value);
-        }
-      } catch (e) {}
-    };
-    fetchInitial();
+    console.log("🔌 PulseMonitor: Connecting to Supabase Realtime...");
 
-    // 2. Realtime Listener
     const channel = supabase
-      .channel('realtime-pulse')
+      .channel('realtime-pulse-debug') // Unique channel name
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'logs_physiology' },
         (payload) => {
+          console.log("⚡ REALTIME EVENT RECEIVED:", payload); // DEBUG LOG
+
           const row = payload.new as any;
+          // Normalize keys (handle different capitalizations/aliases)
           const name = (row.metric_name || row.metric || "").toString().toLowerCase();
           const val = Number(row.value);
 
           if (name.includes('heart') || name.includes('rhr') || name.includes('pulse')) {
+            console.log(`❤️ Heart Rate Update: ${val}`);
             setHeartRate(val);
-            updateStatus(val);
+            
+            if (val > 110) setStatus('Critical');
+            else if (val > 90) setStatus('Spike');
+            else setStatus('Normal');
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("📡 Subscription Status:", status);
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const updateStatus = (bpm: number) => {
-    if (bpm > 110) setStatus('Critical');
-    else if (bpm > 90) setStatus('Spike');
-    else setStatus('Normal');
-  };
-
+  // ... (Render logic same as before) ...
   return (
     <div className="relative p-6 rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl overflow-hidden">
       <AnimatePresence>
@@ -83,6 +71,12 @@ export default function PulseMonitor() {
               <span className="text-sm text-zinc-400">BPM</span>
             </div>
           </div>
+        </div>
+        
+        <div className={`px-3 py-1 rounded-full text-xs font-bold border ${
+          status === 'Normal' ? 'border-emerald-500/50 text-emerald-400' : 'border-red-500/50 text-red-400 animate-pulse'
+        }`}>
+          {status.toUpperCase()}
         </div>
       </div>
     </div>
