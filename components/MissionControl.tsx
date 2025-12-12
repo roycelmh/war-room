@@ -48,26 +48,18 @@ export default function MissionControl() {
   // --- 2. TACTICAL WEATHER TRANSLATOR ---
   const generateWeatherTips = (temp: number, icon: number, isCombat: boolean) => {
     let tips = [];
-    // Rain Logic
     if (icon >= 60) tips.push(isCombat ? "DEPLOY ION SHIELD" : "Bring Umbrella");
-    
-    // Temperature Logic
     if (temp < 15) tips.push(isCombat ? "THERMAL ARMOR REQ" : "Wear Coat");
     else if (temp < 20) tips.push(isCombat ? "LIGHT PLATING" : "Light Jacket");
     else if (temp > 30) tips.push(isCombat ? "COOLANT FLUSH REQ" : "Hydrate");
-    
-    // Visual/UV Logic
     if (icon === 51 || icon === 52) tips.push(isCombat ? "OCULAR SHIELDING" : "Sunglasses");
-    
-    // Default
     if (tips.length === 0) tips.push(isCombat ? "CONDITIONS OPTIMAL" : "Weather Good");
     return tips;
   };
 
-  // --- 3. HYBRID BIO PARSER (JSON + REGEX) ---
+  // --- 3. HYBRID BIO PARSER ---
   const parseBioData = (raw: any) => {
     const metrics: BioMetric[] = [];
-
     // Strategy A: JSON Object (v2.0)
     if (typeof raw === 'object' && raw !== null) {
         if (raw.diagnosis?.tcm_state) metrics.push({ label: 'TCM STATE', value: raw.diagnosis.tcm_state, type: 'verdict' });
@@ -76,7 +68,6 @@ export default function MissionControl() {
         if (raw.directives?.nutrition) metrics.push({ label: 'NUTRITION', value: raw.directives.nutrition, type: 'nutrition' });
         if (metrics.length > 0) return metrics;
     }
-
     // Strategy B: String Regex (v1.0 Fallback)
     if (typeof raw === 'string') {
         const clean = raw.replace(/[*#>•]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -84,43 +75,44 @@ export default function MissionControl() {
             const regex = new RegExp(`${key}[:\\s]+`, 'i');
             const match = clean.match(regex);
             if (!match || match.index === undefined) return null;
-            
             const start = match.index + match[0].length;
             let end = clean.length;
-            
             if (nextKey) {
                 const nextRegex = new RegExp(`${nextKey}[:\\s]+`, 'i');
                 const nextMatch = clean.match(nextRegex);
                 if (nextMatch && nextMatch.index) end = nextMatch.index;
             }
-            
             let val = clean.substring(start, end).trim();
             if (val.endsWith('.') || val.endsWith(';')) val = val.slice(0, -1);
             if (val.length > 70) val = val.split('(')[0].trim(); 
             return val;
         };
-
-        const sleepVal = findValue('Sleep', 'HRV'); 
-        if (sleepVal) metrics.push({ label: 'SLEEP', value: sleepVal, type: 'sleep' });
-        
-        const hrvVal = findValue('HRV', 'Risks'); 
-        if (hrvVal) metrics.push({ label: 'HRV', value: hrvVal, type: 'hrv' });
-        
-        const riskVal = findValue('Risks', 'Verdict'); 
-        if (riskVal) metrics.push({ label: 'RISKS', value: riskVal, type: 'risk' });
-        
-        const verdictVal = findValue('Verdict'); 
-        if (verdictVal) metrics.push({ label: 'VERDICT', value: verdictVal, type: 'verdict' });
+        const sleepVal = findValue('Sleep', 'HRV'); if (sleepVal) metrics.push({ label: 'SLEEP', value: sleepVal, type: 'sleep' });
+        const hrvVal = findValue('HRV', 'Risks'); if (hrvVal) metrics.push({ label: 'HRV', value: hrvVal, type: 'hrv' });
+        const riskVal = findValue('Risks', 'Verdict'); if (riskVal) metrics.push({ label: 'RISKS', value: riskVal, type: 'risk' });
+        const verdictVal = findValue('Verdict'); if (verdictVal) metrics.push({ label: 'VERDICT', value: verdictVal, type: 'verdict' });
     }
-
     if (metrics.length === 0) metrics.push({ label: 'STATUS', value: "No Data Available", type: 'neutral' });
     return metrics;
   };
 
-  // --- DATA FETCHING ---
+  // --- 4. STATE HELPERS (FOR REALTIME & FETCH) ---
+  const updateAnkiState = (val: number) => {
+    setAnki(p => ({...p, backlog: val})); 
+    
+    // Auto-War Mode if Backlog is Critical (> 200)
+    if (val > 200) {
+        setMode('WAR TIME');
+        setHostiles({ count: 50, max: 50, status: 'OVERRUN' });
+    } else {
+        setHostiles({ count: Math.min(val, 50), max: 50, status: 'ENGAGED' });
+    }
+  };
+
+  // --- 5. DATA FETCHING & REALTIME ---
   useEffect(() => {
     const fetchData = async () => {
-      // 1. Mission
+      // A. Mission
       const { data: cal } = await supabase.from('calendar_cache').select('*').limit(1).single();
       if (cal) {
         setMission({ 
@@ -130,14 +122,13 @@ export default function MissionControl() {
         });
       }
       
-      // 2. Anki
+      // B. Anki (Initial Load)
       const { data: deck } = await supabase.from('logs_performance').select('value').eq('metric_name', 'Anki_Backlog').order('timestamp', { ascending: false }).limit(1).single();
       if (deck) { 
-          setAnki(p => ({...p, backlog: deck.value})); 
-          setHostiles({count: Math.min(deck.value, 50), max: 50, status: 'ENGAGED'}); 
+          updateAnkiState(deck.value); 
       }
 
-      // 3. Bio (Using Hybrid Parser)
+      // C. Bio (Hybrid Parser)
       const { data: physio } = await supabase.from('logs_physiology').select('raw_data').eq('metric_name', 'Health_Advice').order('timestamp', { ascending: false }).limit(1).single();
       if (physio?.raw_data) {
         setBioMetrics(parseBioData(physio.raw_data.analysis_summary || physio.raw_data.advice || physio.raw_data));
@@ -145,7 +136,7 @@ export default function MissionControl() {
         setBioMetrics(parseBioData("Sleep: 6.8h HRV: 58 Risks: Low attention Verdict: Stable"));
       }
 
-      // 4. Weather (Using Geolocation)
+      // D. Weather (Using Geolocation)
       const fetchWeather = async (lat?: number, lon?: number) => {
           setIsScanning(true);
           try {
@@ -158,7 +149,6 @@ export default function MissionControl() {
                 setLocationLocked(true);
             }
             
-            // Find specific station data or fallback to first available
             const stationData = data.temperature?.data?.find((s: any) => s.place === targetPlace) || data.temperature?.data?.[0] || { value: 25 };
             const icon = data.icon ? data.icon[0] : 50;
             
@@ -176,11 +166,10 @@ export default function MissionControl() {
           }
       };
       
-      // Geolocation Logic
       if (typeof navigator !== 'undefined' && "geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
             (pos) => fetchWeather(pos.coords.latitude, pos.coords.longitude),
-            () => fetchWeather(), // Fallback if permission denied
+            () => fetchWeather(),
             { timeout: 5000 }
         );
       } else { 
@@ -189,9 +178,32 @@ export default function MissionControl() {
     };
     
     fetchData();
-  }, []); 
 
-  // Re-run tips when mode changes to update Tactical Advice
+    // --- REAL-TIME SUBSCRIPTION ---
+    const channel = supabase
+      .channel('mission-control-live')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'logs_performance' },
+        (payload) => {
+          const row = payload.new as any;
+          
+          // Watch for Anki Updates
+          if (row.metric_name === 'Anki_Backlog') {
+            updateAnkiState(row.value);
+          }
+          // Watch for "Combat" signals (Optional Auto-War Mode)
+          if (row.metric_name === 'Combat_Mode_Trigger') {
+             setMode('WAR TIME');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []); // End of useEffect
+
+  // Re-run tips when mode changes
   useEffect(() => {
     if (weather.temp !== 0) setWeather(prev => ({ ...prev, tips: generateWeatherTips(prev.temp, prev.iconIndex, mode === 'WAR TIME') }));
   }, [mode]);
@@ -231,7 +243,7 @@ export default function MissionControl() {
                 <div className={`h-2 w-2 rounded-full ${mode === 'WAR TIME' ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 shadow-[0_0_10px_#10b981]'}`} />
                 <span className="text-sm font-black tracking-[0.4em] text-white/80">ROYCE</span>
             </div>
-            <span className="text-[9px] font-mono text-zinc-600 tracking-widest pl-4">SYS.VER.5.2 // CONNECTED</span>
+            <span className="text-[9px] font-mono text-zinc-600 tracking-widest pl-4">SYS.VER.5.3 // REALTIME</span>
         </div>
 
         <div className="flex gap-4">
