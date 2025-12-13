@@ -1,206 +1,189 @@
 'use client';
-
 import { useEffect, useState } from 'react';
-// 1. Change this import to use your shared library instance
-import { supabase } from '@/lib/supabase'; 
+import { motion } from 'framer-motion';
+import { supabase } from '@/lib/supabase';
+import { AtmosphericVoid } from '@/components/apex/AtmosphericVoid';
+import { TechGauge } from '@/components/apex/TechGauge';
+import { HoloCard } from '@/components/apex/HoloCard';
+import { EntropyBeast } from '@/components/apex/EntropyBeast'; // <--- NEW IMPORT
 
 export default function ApexWarRoom() {
   const [wallet, setWallet] = useState<any>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [roster, setRoster] = useState<any[]>([]);
+  const [activeThreat, setActiveThreat] = useState<any>(null); // <--- NEW STATE
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
-      // 1. Fetch Wallet
-      const { data: walletData } = await supabase.from('apex_wallet').select('*').limit(1).single();
-      setWallet(walletData);
+        // 1. Fetch Wallet
+        const { data: walletData } = await supabase.from('apex_wallet').select('*').limit(1).single();
+        setWallet(walletData);
+        
+        // 2. Fetch Game State
+        const { data: stateData } = await supabase.from('apex_game_state').select('*').limit(1).single();
+        setGameState(stateData);
 
-      // 2. Fetch Game State
-      const { data: stateData } = await supabase.from('apex_game_state').select('*').limit(1).single();
-      setGameState(stateData);
-
-      // 3. Fetch Roster
-      const { data: rosterData } = await supabase
-        .from('apex_roster')
-        .select(`
-          id, level, bond_xp, is_commander,
-          apex_generals (name, rarity, image_url, affinity, role)
-        `)
-        .order('is_commander', { ascending: false })
-        .order('level', { ascending: false });
-      
-      setRoster(rosterData || []);
-      setLoading(false);
+        // 3. Fetch Active Threat (The Enemy)
+        const { data: threatData } = await supabase
+          .from('apex_active_threats')
+          .select('*, apex_bestiary(*)')
+          .eq('is_defeated', false)
+          .maybeSingle();
+        setActiveThreat(threatData);
+        
+        // 4. Fetch Roster
+        const { data: rosterData } = await supabase
+       .from('apex_roster')
+       .select(`id, level, bond_xp, is_commander, apex_generals (name, rarity, image_url, affinity, role)`)
+       .order('is_commander', { ascending: false })
+       .order('level', { ascending: false });
+       
+        setRoster(rosterData || []);
+        setLoading(false);
     }
-
     fetchData();
   }, []);
 
-  // Helpers
-  const getAffinityColor = (affinity: string) => {
-    if (affinity === 'Body') return 'text-red-400 border-red-900';
-    if (affinity === 'Mind') return 'text-blue-400 border-blue-900';
-    if (affinity === 'Heart') return 'text-green-400 border-green-900';
-    return 'text-neutral-400 border-neutral-800';
-  };
+  if (loading) return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#050505] text-green-500 font-mono text-xs tracking-[0.5em] animate-pulse">
+      <div className="w-16 h-16 border-4 border-t-green-500 border-r-transparent border-b-green-500 border-l-transparent rounded-full animate-spin mb-4" />
+      // INITIALIZING NEURAL LINK...
+    </div>
+  );
 
-  const getDefconColor = (level: number) => {
-    if (level === 1) return 'bg-green-500';
-    if (level === 2) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
+  const commander = roster.find(r => r.is_commander);
+  const troops = roster.filter(r => !r.is_commander);
+  
+  // LOGIC: If a beast is active, OVERRIDE DEFCON to 5 (Critical)
+  const defconLevel = activeThreat ? 5 : (gameState?.defcon_level || 1);
+  const isDanger = defconLevel >= 3; 
 
-  if (loading) return <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center font-mono">INITIALIZING APEX PROTOCOLS...</div>;
+  // Dynamic Theme: If Beast Active -> RED & GLITCHY
+  const themeText = activeThreat ? 'text-red-600 animate-pulse' : (isDanger ? 'text-red-500' : 'text-cyan-400');
+  const themeBorder = activeThreat ? 'border-red-600' : (isDanger ? 'border-red-500/50' : 'border-cyan-500/30');
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-200 p-6 font-mono selection:bg-red-900 selection:text-white">
-      {/* ... (Keep your Header and Main Grid JSX exactly the same) ... */}
+    <div className={`relative min-h-screen font-sans overflow-x-hidden ${activeThreat ? 'text-red-50 crt-flicker selection:bg-red-900' : 'text-neutral-200 selection:bg-cyan-500/30'}`}>
       
-      <header className="max-w-6xl mx-auto mb-12 flex flex-col md:flex-row justify-between items-center gap-6 border-b border-neutral-800 pb-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tighter text-white">
-            APEX <span className="text-red-600">WAR ROOM</span>
-          </h1>
-          <p className="text-neutral-500 text-sm mt-1">
-            CURRENT ERA: {gameState?.current_era_name || 'THE AWAKENING'}
-          </p>
-        </div>
+      {/* 1. ATMOSPHERIC LAYER */}
+      <AtmosphericVoid />
+      {/* Red Alert Overlay if threat active */}
+      {activeThreat && <div className="fixed inset-0 bg-red-900/10 pointer-events-none z-0 mix-blend-overlay" />}
 
-        <div className="flex flex-wrap justify-center gap-4">
-          <ResourcePill color="bg-red-500" label="BODY" value={wallet?.scrolls_body} />
-          <ResourcePill color="bg-blue-500" label="MIND" value={wallet?.scrolls_mind} />
-          <ResourcePill color="bg-green-500" label="HEART" value={wallet?.scrolls_heart} />
-          
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full border border-yellow-900/50 bg-yellow-900/10">
-            <span className="text-xs text-yellow-600 font-bold">FATE</span>
-            <span className="font-bold text-yellow-500">{wallet?.fate_points || 0}</span>
-          </div>
+      {/* 2. HUD LAYER */}
+      <header className={`sticky top-0 z-50 backdrop-blur-xl border-b ${themeBorder} bg-[#050505]/80 px-4 py-3 transition-colors duration-1000`}>
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            
+            <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
+                <div className="flex items-center gap-3">
+                    <div className={`w-2 h-2 md:w-3 md:h-3 rounded-full ${isDanger ? 'bg-red-500 animate-ping' : 'bg-emerald-500 shadow-[0_0_10px_#10b981]'}`} />
+                    <div>
+                        <h1 className="text-xl md:text-2xl font-black tracking-tighter text-white">
+                            APEX <span className={themeText}>WAR ROOM</span>
+                        </h1>
+                        <div className="text-[9px] tracking-[0.3em] text-neutral-500 uppercase hidden md:block">
+                           {activeThreat ? '⚠️ INTRUSION DETECTED' : `SYS.ONLINE // ERA: ${gameState?.current_era_name}`}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 scrollbar-hide no-scrollbar">
+                <TechGauge label="BODY" value={wallet?.scrolls_body} max={20} color="red" />
+                <TechGauge label="MIND" value={wallet?.scrolls_mind} max={20} color="blue" />
+                <TechGauge label="HEART" value={wallet?.scrolls_heart} max={20} color="green" />
+                <TechGauge label="FATE" value={wallet?.fate_points} max={5} color="gold" />
+            </div>
         </div>
       </header>
 
-      {/* MAIN GRID */}
-      <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8">
+      {/* 3. MAIN TACTICAL GRID */}
+      <main className="max-w-7xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
         
-        {/* LEFT COLUMN */}
-        <div className="lg:col-span-1 space-y-6">
-          <div>
-            <h2 className="text-xs font-bold text-neutral-500 mb-4 tracking-widest">CURRENT COMMANDER</h2>
-            {roster.find(r => r.is_commander) ? (
-              <CommanderCard item={roster.find(r => r.is_commander)} />
-            ) : (
-              <div className="h-96 w-full bg-neutral-900/50 rounded border border-dashed border-neutral-800 flex items-center justify-center text-neutral-600 text-sm">
-                NO COMMANDER EQUIPPED
-              </div>
-            )}
-          </div>
+        {/* LEFT COLUMN: THREAT OR COMMANDER */}
+        <div className="lg:col-span-4 space-y-6">
+            
+            {/* DEFCON WIDGET */}
+            <div className={`relative overflow-hidden bg-neutral-900/40 border ${themeBorder} p-6 rounded-xl backdrop-blur-md transition-all`}>
+                <h3 className="text-neutral-500 text-[10px] font-bold tracking-[0.2em] mb-1">THREAT LEVEL</h3>
+                <div className="flex items-baseline gap-2 mb-4">
+                    <span className="text-5xl font-black text-white tracking-tighter">DEFCON</span>
+                    <span className={`text-6xl font-black ${themeText} animate-pulse`}>{defconLevel}</span>
+                </div>
+                {/* Visualizer Bar */}
+                <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
+                    <motion.div 
+                        initial={{ width: 0 }}
+                        animate={{ width: activeThreat ? '100%' : `${(100 / 3) * (4 - defconLevel)}%` }} 
+                        className={`h-full ${activeThreat ? 'bg-red-600 shadow-[0_0_20px_red]' : (isDanger ? 'bg-red-500' : 'bg-cyan-500')}`}
+                    />
+                </div>
+                <p className="text-right text-[9px] font-mono text-neutral-500 mt-2 uppercase">
+                    {activeThreat ? '⚠️ CRITICAL: ENTROPY BEAST ACTIVE' : (isDanger ? '⚠️ ALERT: SYSTEM UNSTABLE' : '✓ SYSTEM NOMINAL')}
+                </p>
+            </div>
 
-          <div className="p-4 rounded border border-neutral-800 bg-neutral-900/30">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-xs text-neutral-400 font-bold">DEFCON LEVEL</span>
-              <span className="font-bold text-white text-xl">{gameState?.defcon_level}</span>
+            {/* COMMANDER / BEAST SLOT */}
+            <div className="space-y-2 relative">
+                <div className="flex items-center justify-between text-[10px] font-bold text-neutral-500 tracking-widest border-b border-white/5 pb-2">
+                    <span>{activeThreat ? '⚠️ TARGET IDENTIFIED' : 'ACTIVE OPERATIVE'}</span>
+                    <span className={activeThreat ? "text-red-500 animate-ping" : "text-green-500 animate-pulse"}>
+                      {activeThreat ? '● ENGAGING' : '● CONNECTED'}
+                    </span>
+                </div>
+
+                <div className="relative group perspective-1000">
+                    <div className={`absolute -top-10 inset-x-10 h-32 blur-2xl pointer-events-none ${activeThreat ? 'bg-red-600/20' : 'bg-gradient-to-b from-cyan-500/10 to-transparent'}`} />
+                    
+                    {/* LOGIC SWITCH: SHOW BEAST OR COMMANDER */}
+                    {activeThreat ? (
+                         <EntropyBeast threat={activeThreat} />
+                    ) : commander ? (
+                         <div className="transform transition-transform duration-500 hover:rotate-x-2">
+                            <HoloCard item={commander} isCommander={true} onClick={() => {}} />
+                         </div>
+                    ) : (
+                        <div className="h-96 border-2 border-dashed border-neutral-800 rounded-xl flex items-center justify-center bg-neutral-900/20 backdrop-blur-sm">
+                            <div className="text-center">
+                                <p className="text-neutral-600 font-mono text-xs tracking-widest mb-2">NO SIGNAL</p>
+                                <div className="px-4 py-2 bg-neutral-800/50 text-xs font-bold text-neutral-500 rounded border border-neutral-700">
+                                    AWAITING ORDERS
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
-            <div className="w-full bg-neutral-800 h-2 rounded-full overflow-hidden mb-2">
-              <div 
-                className={`h-full transition-all duration-500 ${getDefconColor(gameState?.defcon_level)}`} 
-                style={{ width: gameState?.defcon_level === 3 ? '33%' : gameState?.defcon_level === 2 ? '66%' : '100%' }}
-              ></div>
-            </div>
-            <p className={`text-[10px] text-right font-bold ${gameState?.is_safe_mode_active ? 'text-red-500 animate-pulse' : 'text-neutral-500'}`}>
-              {gameState?.is_safe_mode_active ? '⚠️ SAFE MODE ACTIVE' : 'SYSTEMS NOMINAL'}
-            </p>
-          </div>
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="lg:col-span-3">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xs font-bold text-neutral-500 tracking-widest">ACTIVE ROSTER</h2>
-            <div className="text-[10px] text-neutral-600 border border-neutral-800 px-2 py-1 rounded">SORT: LEVEL (DESC)</div>
-          </div>
+        {/* RIGHT COLUMN: ROSTER GRID */}
+        <div className="lg:col-span-8">
+            <div className={`flex items-center justify-between mb-6 sticky top-[80px] z-40 py-2 bg-[#050505]/90 backdrop-blur lg:static lg:bg-transparent`}>
+                <h2 className="text-xs font-bold text-neutral-500 tracking-widest flex items-center gap-2">
+                    <span className={`w-1 h-4 rounded-sm ${activeThreat ? 'bg-red-600' : 'bg-cyan-500'}`} />
+                    UNIT ROSTER // <span className="text-white">{troops.length} READY</span>
+                </h2>
+            </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {roster.filter(r => !r.is_commander).map((item) => (
-               <RosterCard key={item.id} item={item} getAffinityColor={getAffinityColor} />
-            ))}
-          </div>
+            <motion.div 
+                className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 ${activeThreat ? 'opacity-50 grayscale' : ''}`}
+                initial="hidden"
+                animate="show"
+                variants={{
+                    hidden: { opacity: 0 },
+                    show: { opacity: 1, transition: { staggerChildren: 0.05 } }
+                }}
+            >
+                {troops.map((unit) => (
+                    <motion.div key={unit.id} variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}>
+                        <HoloCard item={unit} onClick={() => {}} />
+                    </motion.div>
+                ))}
+            </motion.div>
         </div>
 
       </main>
-    </div>
-  );
-}
-
-// === KEEP YOUR SUB-COMPONENTS (ResourcePill, CommanderCard, RosterCard) BELOW ===
-// (I omitted them here to save space, but you should keep them in your file)
-
-function ResourcePill({ color, label, value }: { color: string, label: string, value: number }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-neutral-900 border border-neutral-800">
-      <span className={`w-2 h-2 rounded-full ${color}`}></span>
-      <span className="text-[10px] text-neutral-400 font-bold tracking-wide">{label}</span>
-      <span className="font-bold text-white text-sm">{value || 0}</span>
-    </div>
-  );
-}
-
-function CommanderCard({ item }: { item: any }) {
-  const gen = item.apex_generals;
-  return (
-    <div className={`relative bg-neutral-900 rounded-lg overflow-hidden border border-neutral-800 group hover:border-neutral-600 transition-colors shadow-2xl`}>
-       {/* Image */}
-       <div className="h-96 w-full relative">
-          <img src={gen.image_url} alt={gen.name} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
-          <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent"></div>
-       </div>
-       
-       {/* Overlay Info */}
-       <div className="absolute bottom-0 left-0 w-full p-4">
-          <h3 className="text-lg font-bold text-white uppercase tracking-wider">{gen.name}</h3>
-          <p className="text-xs text-neutral-400 uppercase tracking-wide mt-1">{gen.rarity} // {gen.role}</p>
-          
-          <div className="mt-3 flex items-center gap-2">
-            <span className="text-[10px] bg-neutral-950/80 border border-neutral-700 px-2 py-1 rounded text-white">LVL {item.level}</span>
-            <span className={`text-[10px] bg-neutral-950/80 border px-2 py-1 rounded ${
-              gen.affinity === 'Body' ? 'text-red-400 border-red-900' :
-              gen.affinity === 'Mind' ? 'text-blue-400 border-blue-900' :
-              gen.affinity === 'Heart' ? 'text-green-400 border-green-900' : 'text-gray-400 border-gray-700'
-            }`}>
-               {gen.affinity}
-            </span>
-          </div>
-       </div>
-    </div>
-  );
-}
-
-function RosterCard({ item, getAffinityColor }: { item: any, getAffinityColor: (a:string) => string }) {
-  const gen = item.apex_generals;
-  const rarityBorder = gen.rarity === 'SSR' ? 'border-yellow-600/50' : gen.rarity === 'UR' ? 'border-purple-600/50' : 'border-neutral-800';
-  
-  return (
-    <div className={`relative bg-neutral-900 rounded-lg overflow-hidden border ${rarityBorder} hover:-translate-y-1 transition-transform duration-200 group`}>
-      <div className="h-48 relative bg-neutral-800">
-         {gen.image_url ? (
-           <img src={gen.image_url} className="w-full h-full object-cover opacity-75 group-hover:opacity-100 transition-opacity" />
-         ) : (
-           <div className="w-full h-full flex items-center justify-center text-neutral-700 text-xs">NO SIGNAL</div>
-         )}
-         <div className="absolute inset-0 bg-gradient-to-t from-neutral-900 to-transparent"></div>
-      </div>
-
-      <div className="p-3 relative -mt-8 z-10">
-         <h4 className="text-sm font-bold text-white truncate">{gen.name}</h4>
-         <div className="flex justify-between items-center mt-1">
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border bg-neutral-950/50 ${getAffinityColor(gen.affinity)}`}>
-              {gen.affinity}
-            </span>
-            <span className="text-[10px] text-neutral-500">LVL {item.level}</span>
-         </div>
-         <div className="mt-3 w-full bg-neutral-800 h-1 rounded-full overflow-hidden">
-            <div className="bg-neutral-600 h-full" style={{ width: `${item.bond_xp % 100}%` }}></div>
-         </div>
-      </div>
     </div>
   );
 }

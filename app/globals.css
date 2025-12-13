@@ -7,11 +7,13 @@
   --foreground: #ededed;
 }
 
+/* === YOUR EXISTING GLOBAL STYLES === */
 body {
   color: var(--foreground);
   background: var(--background);
 }
 
+/* Your existing grid background (Keeping this for your homepage) */
 body::before {
   content: "";
   position: fixed;
@@ -24,6 +26,7 @@ body::before {
   z-index: -1;
 }
 
+/* Custom Scrollbar */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: #09090b; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
@@ -32,9 +35,101 @@ body::before {
 @layer base {
   body {
     @apply bg-zinc-950 text-white;
-    /* Optional: Subtle grid background */
-    background-image: linear-gradient(to right, #18181b 1px, transparent 1px),
-                      linear-gradient(to bottom, #18181b 1px, transparent 1px);
-    background-size: 40px 40px;
   }
+}
+
+/* ========================================= */
+/* === NEW: APEX WAR ROOM SPECIAL EFFECTS === */
+/* ========================================= */
+
+/* 1. The Prismatic Foil Sheen (For UR Cards) */
+.holo-foil {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.holo-foil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg, 
+    transparent 20%, 
+    rgba(255, 0, 150, 0.4) 30%, 
+    rgba(0, 255, 255, 0.4) 45%, 
+    rgba(255, 255, 0, 0.4) 60%, 
+    transparent 80%
+  );
+  background-size: 300% 300%;
+  mix-blend-mode: color-dodge;
+  animation: holo-pan 6s ease-in-out infinite alternate;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* 2. The Breathing Gold Effect (For SSR Cards) */
+.gold-pulse {
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.1);
+  animation: pulse-gold 3s ease-in-out infinite;
+}
+
+@keyframes pulse-gold {
+  0%, 100% { 
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); 
+    border-color: rgba(255, 215, 0, 0.4); 
+  }
+  50% { 
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); 
+    border-color: rgba(255, 215, 0, 0.9); 
+  }
+}
+
+/* 3. Global Holographic Pan Animation */
+@keyframes holo-pan {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
+}
+
+/* === ENTROPY BEAST GLITCH EFFECTS === */
+
+@keyframes glitch-shake {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
+.animate-glitch {
+  animation: glitch-shake 0.2s infinite;
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scan-line-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, rgba(255, 0, 0, 0.2) 50%, transparent 60%);
+  background-size: 100% 4px;
+  animation: scan-line 3s linear infinite;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* CRT Flicker for the whole screen when beast is active */
+.crt-flicker {
+  animation: flicker 0.15s infinite;
+  opacity: 1;
+}
+
+@keyframes flicker {
+  0% { opacity: 0.98; }
+  50% { opacity: 1; }
+  100% { opacity: 0.99; }
 }
